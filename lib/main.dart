@@ -2,10 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'dart:html' as html;
-import 'package:http/http.dart' as http;
-
-/// Client id provided by Twitch
-const String clientId = "YOUR_CLIENT_ID";
 
 void main() => runApp(MyApp());
 
@@ -25,16 +21,12 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  String _token;
+  String _token = '';
   html.WindowBase _popupWin;
+  var counter = 1;
 
   Future<String> _validateToken() async {
-    final response = await http.get(
-      Uri.parse('https://id.twitch.tv/oauth2/validate'),
-      headers: {'Authorization': 'OAuth $_token'},
-    );
-    return (jsonDecode(response.body) as Map<String, dynamic>)['login']
-        .toString();
+    return 'success. token = $_token';
   }
 
   void _login(String data) {
@@ -47,10 +39,7 @@ class _MyHomePageState extends State<MyHomePage> {
       _popupWin = null;
     }
 
-    setState(() => _token = receivedUri.fragment
-        .split('&')
-        .firstWhere((e) => e.startsWith('access_token='))
-        .substring('access_token='.length));
+    setState(() => _token = receivedUri.queryParameters['access_token']);
   }
 
   @override
@@ -59,44 +48,68 @@ class _MyHomePageState extends State<MyHomePage> {
 
     /// Listen to message send with `postMessage`.
     html.window.onMessage.listen((event) {
+      print('+++ message: $event');
+
       /// The event contains the token which means the user is connected.
       if (event.data.toString().contains('access_token=')) {
         _login(event.data);
       }
     });
+  }
 
-    /// You are not connected so open the Twitch authentication page.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final currentUri = Uri.base;
-      final redirectUri = Uri(
-        host: currentUri.host,
-        scheme: currentUri.scheme,
-        port: currentUri.port,
-        path: '/static.html',
-      );
-      final authUrl =
-          'https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=$clientId&redirect_uri=$redirectUri&scope=viewing_activity_read';
-      _popupWin = html.window.open(
-          authUrl, "Twitch Auth", "width=800, height=900, scrollbars=yes");
-    });
+  /// You are not connected so open the authentication page.
+  void _showAuthPopUp() {
+    final currentUri = Uri.base;
+    final redirectUri = Uri(
+      host: currentUri.host,
+      scheme: currentUri.scheme,
+      port: currentUri.port,
+      path: '/static.html?access_token=1234',
+    );
+    final authUrl = 'https://redirector-3ee97.web.app?url=$redirectUri';
+    _popupWin = html.window
+        .open(authUrl, "Twitch Auth", "width=800, height=900, scrollbars=yes");
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Twitch web login')),
+      appBar: AppBar(title: Text('Web login')),
       body: Center(
-        child: _token != null && _token.isNotEmpty
-            ? FutureBuilder<String>(
-                future: _validateToken(),
-                builder: (_, snapshot) {
-                  if (!snapshot.hasData) return CircularProgressIndicator();
-                  return Container(child: Text('Welcome ${snapshot.data}'));
+        child: Column(
+          children: [
+            _token.isNotEmpty
+                ? FutureBuilder<String>(
+                    future: _validateToken(),
+                    builder: (_, snapshot) {
+                      if (!snapshot.hasData) return CircularProgressIndicator();
+                      return Container(child: Text('Welcome ${snapshot.data}'));
+                    },
+                  )
+                : Container(
+                    child: Column(
+                      children: [
+                        Text('You are not connected'),
+                        TextButton(
+                          child: Text('Log in'),
+                          onPressed: _showAuthPopUp,
+                        ),
+                      ],
+                    ),
+                  ),
+            SizedBox(
+              height: 20,
+            ),
+            Text('Counter $counter'),
+            TextButton(
+                onPressed: () {
+                  setState(() {
+                    counter = counter + 5;
+                  });
                 },
-              )
-            : Container(
-                child: Text('You are not connected'),
-              ),
+                child: Text('Add counter')),
+          ],
+        ),
       ),
     );
   }
